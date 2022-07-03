@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("7fQFifcVnr4gkSHwkp21ggCKVSrhLdSccDZ2gdUHoy25");
 
 #[program]
 pub mod token_plata {
@@ -10,7 +10,7 @@ pub mod token_plata {
         let mint = &mut ctx.accounts.mint;
         
         mint.tag = AccountTag::Mint;
-        mint.authority = ctx.accounts.authority;
+        mint.authority = *ctx.accounts.authority.key;
         mint.supply = 0;
        
         Ok(())
@@ -20,8 +20,8 @@ pub mod token_plata {
         let tokenAccount = &mut ctx.accounts.tokenAccount;
         
         tokenAccount.tag = AccountTag::TokenAccount;
-        tokenAccount.owner = ctx.accounts.owner;
-        tokenAccount.mint = ctx.accounts.mint;
+        tokenAccount.owner = ctx.accounts.owner.key();
+        tokenAccount.mint = ctx.accounts.mint.key();
         tokenAccount.amount = 0;
 
         Ok(())
@@ -81,40 +81,42 @@ pub struct InitializeTokenAccount<'info> {
     pub tokenAccount: Account<'info, TokenAccountData>,
     #[account(mut)]
     pub owner: Signer<'info>,
+    #[account(mut)]
     pub mint: Account<'info, MintData>,
+    pub mintAuthority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct Mint<'info> {
-    #[account(mut, owner = tokenAccountOwner)]
+    #[account(mut)]
     pub tokenAccount: Account<'info, TokenAccountData>,
     pub tokenAccountOwner: Signer<'info>,
-    #[account(mut, has_one=mintAuthority)]
+    #[account(mut)]
     pub mint: Account<'info, MintData>,
     pub mintAuthority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct Burn<'info> {
-    #[account(mut, owner = tokenAccountOwner)]
+    #[account(mut)]
     pub tokenAccount: Account<'info, TokenAccountData>,
     pub tokenAccountOwner: Signer<'info>,
-    #[account(mut, has_one=mintAuthority)]
+    #[account(mut)]
     pub mint: Account<'info, MintData>,
     pub mintAuthority: Signer<'info>
 }
 
 #[derive(Accounts)]
 pub struct Transfer<'info> {
-    #[account(mut, owner = srcTokenAccountOwner)]
+    #[account(mut)]
     pub srcTokenAccount: Account<'info, TokenAccountData>,
     pub srcTokenAccountOwner: Signer<'info>,
     #[account(mut)]
     pub dstTokenAcount: Account<'info, TokenAccountData>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Debug, Clone, PartialEq)]
 pub enum AccountTag {
     Uninitialized,
     Mint,

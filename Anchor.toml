@@ -1,7 +1,7 @@
 [features]
 seeds = false
 [programs.localnet]
-token_plata = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+token_plata = "7fQFifcVnr4gkSHwkp21ggCKVSrhLdSccDZ2gdUHoy25"
 
 [registry]
 url = "https://anchor.projectserum.com"
