@@ -6,61 +6,80 @@ declare_id!("7fQFifcVnr4gkSHwkp21ggCKVSrhLdSccDZ2gdUHoy25");
 pub mod token_plata {
     use super::*;
 
-    pub fn initializeMint(ctx: Context<InitializeMint>) -> Result<()> {
+    pub fn initialize_mint(ctx: Context<InitializeMint>) -> Result<()> {
         let mint = &mut ctx.accounts.mint;
-        
-        mint.tag = AccountTag::Mint;
-        mint.authority = *ctx.accounts.authority.key;
+
+        // msg!("Mint key {}", mint.key());        
+
+        mint.authority = ctx.accounts.payer.key();
         mint.supply = 0;
        
         Ok(())
     }
 
-    pub fn initializeTokenAccount(ctx: Context<InitializeTokenAccount>) -> Result<()> {
-        let tokenAccount = &mut ctx.accounts.tokenAccount;
+    pub fn initialize_token_account(ctx: Context<InitializeTokenAccount>) -> Result<()> {
+        let token_account = &mut ctx.accounts.token_account;
         
-        tokenAccount.tag = AccountTag::TokenAccount;
-        tokenAccount.owner = ctx.accounts.owner.key();
-        tokenAccount.mint = ctx.accounts.mint.key();
-        tokenAccount.amount = 0;
+        token_account.owner = ctx.accounts.payer.key();
+        token_account.mint = ctx.accounts.mint.key();
+        token_account.amount = 0;
 
         Ok(())
     }
 
     pub fn mint(ctx: Context<Mint>, amount: u64) -> Result<()> {
-        let tokenAccount = &mut ctx.accounts.tokenAccount;
+        let dst = &mut ctx.accounts.dst;
         let mint = &mut ctx.accounts.mint;
+        let authority = &ctx.accounts.authority;
 
+        assert!(mint.authority == authority.key());
+        assert!(dst.mint == mint.key());
+        
         mint.supply += amount;
-        tokenAccount.amount += amount;        
+        dst.amount += amount;    
+        
+        msg!("total supply {}", mint.supply);
+        msg!("dst amount {}", dst.amount);
+
         Ok(())
     }
 
     pub fn burn(ctx: Context<Burn>, amount: u64) -> Result<()> {
-        let mut mint = &mut ctx.accounts.mint;
-        let mut tokenAccount = &mut ctx.accounts.tokenAccount;
+        let mint = &mut ctx.accounts.mint;
+        let src = &mut ctx.accounts.src;
+        let owner = &ctx.accounts.owner;
 
-        if tokenAccount.amount < amount {
-            return Err(error!(ErrorCode::InsufficientFunds));
-        }
+        assert!(src.owner == owner.key());
+        assert!(src.mint == mint.key());
+        assert!(src.amount >= amount);
 
-        tokenAccount.amount -= amount;
-        mint.supply -= amount;        
+        // if token_account.amount < amount {
+        //     return Err(error!(ErrorCode::InsufficientFunds));
+        // }
+        
+        src.amount -= amount;
+        mint.supply -= amount;   
+        
+        msg!("total supply {}", mint.supply);
+        msg!("src amount {}", src.amount);
         
         Ok(())
     }
 
     pub fn transfer(ctx: Context<Transfer>, amount: u64) -> Result<()> {
-        let mut srcTokenAccount = &mut ctx.accounts.srcTokenAccount;
-        let mut dstTokenAccount = &mut ctx.accounts.dstTokenAcount;
+        let src = &mut ctx.accounts.src;
+        let dst = &mut ctx.accounts.dst;
+        let owner = &ctx.accounts.owner;
 
-        if srcTokenAccount.amount < amount {
-            return Err(error!(ErrorCode::InsufficientFunds));
-        }
+        assert!(src.amount >= amount);
+        assert!(src.owner == owner.key());
+        assert!(src.mint == dst.mint);
+        
+        src.amount -= amount;
+        dst.amount += amount;
 
-        srcTokenAccount.amount -= amount;
-        dstTokenAccount.amount += amount;
-
+        msg!("src supply {}", src.amount);
+        msg!("dst amount {}", dst.amount);
         Ok(())
     }
 
@@ -68,72 +87,75 @@ pub mod token_plata {
 
 #[derive(Accounts)]
 pub struct InitializeMint<'info> {
-    #[account(init, payer = authority, space = 8 + 41)]
-    pub mint: Account<'info, MintData>,
+    #[account(
+        init, 
+        seeds = [
+            payer.key().as_ref(),
+        ],
+        payer = payer, 
+        bump,
+        space = 8 + 40
+    )]
+    mint: Account<'info, MintData>,
     #[account(mut)]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
+    payer: Signer<'info>,
+    system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct InitializeTokenAccount<'info> {
-    #[account(init, payer = owner, space = 8 + 73)]
-    pub tokenAccount: Account<'info, TokenAccountData>,
+    #[account(
+        init,
+        seeds = [
+            payer.key().as_ref(),
+            mint.key().as_ref(),
+        ],
+        bump,
+        space = 8 + 72,
+        payer = payer,
+    )]
+    token_account: Account<'info, TokenAccountData>,
+    mint: Account<'info, MintData>,
     #[account(mut)]
-    pub owner: Signer<'info>,
-    #[account(mut)]
-    pub mint: Account<'info, MintData>,
-    pub mintAuthority: Signer<'info>,
-    pub system_program: Program<'info, System>,
+    payer: Signer<'info>,
+    system_program: Program<'info, System>
 }
 
 #[derive(Accounts)]
 pub struct Mint<'info> {
     #[account(mut)]
-    pub tokenAccount: Account<'info, TokenAccountData>,
-    pub tokenAccountOwner: Signer<'info>,
+    mint: Account<'info, MintData>,
     #[account(mut)]
-    pub mint: Account<'info, MintData>,
-    pub mintAuthority: Signer<'info>,
+    dst: Account<'info, TokenAccountData>,
+    authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct Burn<'info> {
     #[account(mut)]
-    pub tokenAccount: Account<'info, TokenAccountData>,
-    pub tokenAccountOwner: Signer<'info>,
+    mint: Account<'info, MintData>,
     #[account(mut)]
-    pub mint: Account<'info, MintData>,
-    pub mintAuthority: Signer<'info>
+    src: Account<'info, TokenAccountData>,
+    owner: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct Transfer<'info> {
     #[account(mut)]
-    pub srcTokenAccount: Account<'info, TokenAccountData>,
-    pub srcTokenAccountOwner: Signer<'info>,
+    pub src: Account<'info, TokenAccountData>,
     #[account(mut)]
-    pub dstTokenAcount: Account<'info, TokenAccountData>,
+    pub dst: Account<'info, TokenAccountData>,
+    owner: Signer<'info>,
 }
-
-#[derive(AnchorSerialize, AnchorDeserialize, Debug, Clone, PartialEq)]
-pub enum AccountTag {
-    Uninitialized,
-    Mint,
-    TokenAccount,
-}
-
 
 #[account]
 pub struct MintData {
-    pub tag: AccountTag, // 1
     pub authority: Pubkey, // 32
     pub supply: u64, // 8
 }
 
 #[account]
 pub struct TokenAccountData {
-    pub tag: AccountTag, // 1b
     pub owner: Pubkey, // 32
     pub mint: Pubkey, // 32
     pub amount: u64, // 8
